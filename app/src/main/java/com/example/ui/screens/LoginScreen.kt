@@ -103,7 +103,7 @@ fun LoginScreen(
             )
 
             Text(
-                text = "Sleek Real-Time Chat & Agora Calling",
+                text = "Power by Ahmed Rasel",
                 fontSize = 14.sp,
                 color = PlatinumGray,
                 textAlign = TextAlign.Center,
