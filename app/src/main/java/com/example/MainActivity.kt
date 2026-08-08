@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -14,6 +15,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -119,8 +121,22 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize()
                 ) {
                     composable("login") {
+                        val context = LocalContext.current
                         LoginScreen(
-                            onSignIn = { name ->
+                            onGoogleSignInClick = {
+                                authViewModel.signInWithGoogle(
+                                    context = context,
+                                    onSuccess = { _ ->
+                                        navController.navigate("home") {
+                                            popUpTo("login") { inclusive = true }
+                                        }
+                                    },
+                                    onError = { errorMsg ->
+                                        Toast.makeText(context, "Google Sign-In Notice: $errorMsg", Toast.LENGTH_LONG).show()
+                                    }
+                                )
+                            },
+                            onCustomNameSignIn = { name ->
                                 authRepository.signInWithCustomName(name) {
                                     navController.navigate("home") {
                                         popUpTo("login") { inclusive = true }

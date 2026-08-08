@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthViewModel(val repository: AuthRepository) : ViewModel() {
@@ -27,6 +28,16 @@ class AuthViewModel(val repository: AuthRepository) : ViewModel() {
     val contactRequests: StateFlow<List<ContactRequest>> = currentUser.flatMapLatest { user ->
         if (user != null) repository.getContactRequestsFlow(user.uid) else flowOf(emptyList())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun signInWithGoogle(
+        context: android.content.Context,
+        onSuccess: (User) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            repository.signInWithGoogle(context, onSuccess, onError)
+        }
+    }
 
     fun updateProfile(displayName: String, aboutStatus: String, photoUrl: String) {
         repository.updateProfile(displayName, aboutStatus, photoUrl)

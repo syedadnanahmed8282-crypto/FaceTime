@@ -2,10 +2,16 @@ package com.example.data
 
 import android.content.Context
 import android.util.Log
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
 import com.example.model.ContactRequest
 import com.example.model.User
 import com.example.utils.Constants
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
@@ -49,6 +55,75 @@ class AuthRepository(private val context: Context) {
             syncUserToFirebase(user)
         } else {
             _currentUserState.value = null
+        }
+    }
+
+    suspend fun signInWithGoogle(
+        activityContext: Context,
+        onSuccess: (User) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val googleIdOption = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(Constants.WEB_CLIENT_ID)
+            .setAutoSelectEnabled(true)
+            .build()
+
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(googleIdOption)
+            .build()
+
+        val credentialManager = CredentialManager.create(activityContext)
+
+        try {
+            val result = credentialManager.getCredential(
+                request = request,
+                context = activityContext
+            )
+            val credential = result.credential
+            if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                val idToken = googleIdTokenCredential.idToken
+                val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
+                val currentAuth = auth
+                if (currentAuth != null) {
+                    currentAuth.signInWithCredential(firebaseCredential).addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            val fbUser = currentAuth.currentUser
+                            val user = User(
+                                uid = fbUser?.uid ?: "user_${System.currentTimeMillis() % 100000}",
+                                displayName = fbUser?.displayName ?: googleIdTokenCredential.displayName ?: "Family User",
+                                email = fbUser?.email ?: googleIdTokenCredential.id ?: "",
+                                photoUrl = fbUser?.photoUrl?.toString() ?: googleIdTokenCredential.profilePictureUri?.toString() ?: "",
+                                isOnline = true,
+                                lastSeen = System.currentTimeMillis()
+                            )
+                            _currentUserState.value = user
+                            syncUserToFirebase(user)
+                            onSuccess(user)
+                        } else {
+                            onError(task.exception?.localizedMessage ?: "Firebase Google Sign-In failed")
+                        }
+                    }
+                } else {
+                    val user = User(
+                        uid = "user_${System.currentTimeMillis() % 100000}",
+                        displayName = googleIdTokenCredential.displayName ?: "Family User",
+                        email = googleIdTokenCredential.id ?: "",
+                        photoUrl = googleIdTokenCredential.profilePictureUri?.toString() ?: "",
+                        isOnline = true,
+                        lastSeen = System.currentTimeMillis()
+                    )
+                    _currentUserState.value = user
+                    syncUserToFirebase(user)
+                    onSuccess(user)
+                }
+            } else {
+                onError("Unsupported credential response")
+            }
+        } catch (e: Exception) {
+            Log.e("AuthRepository", "1-Tap Google Sign-In failed: ${e.message}", e)
+            onError(e.localizedMessage ?: "Google Sign-In error")
         }
     }
 

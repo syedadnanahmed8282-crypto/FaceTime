@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.VideoCall
@@ -25,7 +27,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -48,9 +53,11 @@ import com.example.ui.theme.RoyalBlueMedium
 
 @Composable
 fun LoginScreen(
-    onSignIn: (String) -> Unit
+    onGoogleSignInClick: () -> Unit,
+    onCustomNameSignIn: (String) -> Unit
 ) {
     var nameInput by remember { mutableStateOf("") }
+    var showCustomNameInput by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -103,7 +110,7 @@ fun LoginScreen(
                 modifier = Modifier.padding(top = 4.dp, bottom = 32.dp)
             )
 
-            // Sign-In Card
+            // Primary 1-Tap Google Sign-In Card
             GlassmorphicCard(
                 modifier = Modifier.fillMaxWidth(),
                 backgroundColor = RoyalBlueCard
@@ -113,60 +120,102 @@ fun LoginScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Enter Your Name",
-                        fontSize = 16.sp,
+                        text = "1-Tap Google Sign-In",
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = PureWhite
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
-                        value = nameInput,
-                        onValueChange = { nameInput = it },
-                        placeholder = { Text("Your Name (e.g. Adnan)", color = PlatinumGray) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = null,
-                                tint = ElectricCyan
-                            )
-                        },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = ElectricCyan,
-                            unfocusedBorderColor = PlatinumGray.copy(alpha = 0.5f),
-                            focusedTextColor = PureWhite,
-                            unfocusedTextColor = PureWhite
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                    Text(
+                        text = "Sign in securely with your Google Account to access contacts, chat, and HD calling.",
+                        fontSize = 12.sp,
+                        color = PlatinumGray,
+                        textAlign = TextAlign.Center
                     )
 
                     Spacer(modifier = Modifier.height(20.dp))
 
                     Button(
-                        onClick = { onSignIn(nameInput) },
+                        onClick = onGoogleSignInClick,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp),
-                        shape = RoundedCornerShape(25.dp),
+                            .height(52.dp),
+                        shape = RoundedCornerShape(26.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = ElectricCyan,
                             contentColor = RoyalBlueDark
                         )
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = "Google Account",
+                            modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Start Calling & Chatting",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
+                            text = "Continue with Google",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.ExtraBold
                         )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (!showCustomNameInput) {
+                        TextButton(
+                            onClick = { showCustomNameInput = true }
+                        ) {
+                            Text(
+                                text = "Or test with custom name / emulator fallback",
+                                fontSize = 12.sp,
+                                color = PlatinumGray
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = nameInput,
+                            onValueChange = { nameInput = it },
+                            placeholder = { Text("Your Name (e.g. Adnan)", color = PlatinumGray) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = ElectricCyan
+                                )
+                            },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = ElectricCyan,
+                                unfocusedBorderColor = PlatinumGray.copy(alpha = 0.5f),
+                                focusedTextColor = PureWhite,
+                                unfocusedTextColor = PureWhite
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = { onCustomNameSignIn(nameInput) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp),
+                            shape = RoundedCornerShape(22.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PureWhite.copy(alpha = 0.15f),
+                                contentColor = PureWhite
+                            )
+                        ) {
+                            Text(
+                                text = "Sign In with Custom Name",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
