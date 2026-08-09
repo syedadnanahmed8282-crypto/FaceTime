@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
+import com.example.R
 import com.example.model.ContactRequest
 import com.example.model.User
 import com.example.utils.Constants
@@ -63,9 +64,23 @@ class AuthRepository(private val context: Context) {
         onSuccess: (User) -> Unit,
         onError: (String) -> Unit
     ) {
+        val webClientId = try {
+            activityContext.getString(R.string.default_web_client_id)
+        } catch (e: Exception) {
+            Log.e("AuthRepository", "Failed to resolve R.string.default_web_client_id from google-services.json", e)
+            ""
+        }
+
+        if (webClientId.isBlank()) {
+            val errorMsg = "Google Sign-In configuration error: default_web_client_id not found in google-services.json"
+            Log.e("AuthRepository", errorMsg)
+            onError(errorMsg)
+            return
+        }
+
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(Constants.WEB_CLIENT_ID)
+            .setServerClientId(webClientId)
             .setAutoSelectEnabled(true)
             .build()
 
@@ -102,7 +117,9 @@ class AuthRepository(private val context: Context) {
                             syncUserToFirebase(user)
                             onSuccess(user)
                         } else {
-                            onError(task.exception?.localizedMessage ?: "Firebase Google Sign-In failed")
+                            val failureMsg = task.exception?.localizedMessage ?: "Firebase Google Sign-In authentication failed"
+                            Log.e("AuthRepository", "Firebase signInWithCredential failed: $failureMsg", task.exception)
+                            onError(failureMsg)
                         }
                     }
                 } else {
@@ -119,10 +136,12 @@ class AuthRepository(private val context: Context) {
                     onSuccess(user)
                 }
             } else {
-                onError("Unsupported credential response")
+                val failureMsg = "Unsupported credential response type: ${credential.type}"
+                Log.e("AuthRepository", failureMsg)
+                onError(failureMsg)
             }
         } catch (e: Exception) {
-            Log.e("AuthRepository", "1-Tap Google Sign-In failed: ${e.message}", e)
+            Log.e("AuthRepository", "Google Credential Manager Sign-In failed: ${e.message}", e)
             onError(e.localizedMessage ?: "Google Sign-In error")
         }
     }
