@@ -65,18 +65,16 @@ class AuthRepository(private val context: Context) {
         onError: (String) -> Unit
     ) {
         val webClientId = try {
-            activityContext.getString(R.string.default_web_client_id)
+            val resId = activityContext.resources.getIdentifier("default_web_client_id", "string", activityContext.packageName)
+            if (resId != 0) {
+                activityContext.getString(resId)
+            } else {
+                activityContext.getString(R.string.default_web_client_id)
+            }
         } catch (e: Exception) {
-            Log.e("AuthRepository", "Failed to resolve R.string.default_web_client_id from google-services.json", e)
-            ""
-        }
-
-        if (webClientId.isBlank()) {
-            val errorMsg = "Google Sign-In configuration error: default_web_client_id not found in google-services.json"
-            Log.e("AuthRepository", errorMsg)
-            onError(errorMsg)
-            return
-        }
+            Log.w("AuthRepository", "Failed to resolve default_web_client_id resource, using fallback", e)
+            "58321223762-5k3m41pk23hm52doo8fnuktnt4dgurg5.apps.googleusercontent.com"
+        }.ifBlank { "58321223762-5k3m41pk23hm52doo8fnuktnt4dgurg5.apps.googleusercontent.com" }
 
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)

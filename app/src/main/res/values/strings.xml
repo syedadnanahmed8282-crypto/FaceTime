@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">FaceTime</string>
+    <string name="default_web_client_id" translatable="false">58321223762-5k3m41pk23hm52doo8fnuktnt4dgurg5.apps.googleusercontent.com</string>
 </resources>
