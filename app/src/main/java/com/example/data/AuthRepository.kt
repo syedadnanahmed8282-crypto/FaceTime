@@ -64,17 +64,7 @@ class AuthRepository(private val context: Context) {
         onSuccess: (User) -> Unit,
         onError: (String) -> Unit
     ) {
-        val webClientId = try {
-            val resId = activityContext.resources.getIdentifier("default_web_client_id", "string", activityContext.packageName)
-            if (resId != 0) {
-                activityContext.getString(resId)
-            } else {
-                activityContext.getString(R.string.default_web_client_id)
-            }
-        } catch (e: Exception) {
-            Log.w("AuthRepository", "Failed to resolve default_web_client_id resource, using fallback", e)
-            "58321223762-5k3m41pk23hm52doo8fnuktnt4dgurg5.apps.googleusercontent.com"
-        }.ifBlank { "58321223762-5k3m41pk23hm52doo8fnuktnt4dgurg5.apps.googleusercontent.com" }
+        val webClientId = "58321223762-5k3m41pk23hm52doo8fnuktnt4dgurg5.apps.googleusercontent.com"
 
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
