@@ -57,7 +57,6 @@ fun LoginScreen(
     onCustomNameSignIn: (String) -> Unit
 ) {
     var nameInput by remember { mutableStateOf("") }
-    var showCustomNameInput by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -163,59 +162,46 @@ fun LoginScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    if (!showCustomNameInput) {
-                        TextButton(
-                            onClick = { showCustomNameInput = true }
-                        ) {
-                            Text(
-                                text = "Or test with custom name / emulator fallback",
-                                fontSize = 12.sp,
-                                color = PlatinumGray
+                    OutlinedTextField(
+                        value = nameInput,
+                        onValueChange = { nameInput = it },
+                        placeholder = { Text("Enter Your Name (e.g. Ahmed)", color = PlatinumGray) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = ElectricCyan
                             )
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = nameInput,
-                            onValueChange = { nameInput = it },
-                            placeholder = { Text("Your Name (e.g. Adnan)", color = PlatinumGray) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = null,
-                                    tint = ElectricCyan
-                                )
-                            },
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = ElectricCyan,
-                                unfocusedBorderColor = PlatinumGray.copy(alpha = 0.5f),
-                                focusedTextColor = PureWhite,
-                                unfocusedTextColor = PureWhite
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
+                        },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ElectricCyan,
+                            unfocusedBorderColor = PlatinumGray.copy(alpha = 0.5f),
+                            focusedTextColor = PureWhite,
+                            unfocusedTextColor = PureWhite
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = { onCustomNameSignIn(nameInput) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PureWhite.copy(alpha = 0.15f),
+                            contentColor = PureWhite
                         )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Button(
-                            onClick = { onCustomNameSignIn(nameInput) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(44.dp),
-                            shape = RoundedCornerShape(22.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PureWhite.copy(alpha = 0.15f),
-                                contentColor = PureWhite
-                            )
-                        ) {
-                            Text(
-                                text = "Sign In with Custom Name",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                    ) {
+                        Text(
+                            text = "Sign In with Name",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
