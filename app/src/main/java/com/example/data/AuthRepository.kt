@@ -66,12 +66,15 @@ class AuthRepository(private val context: Context) {
         onSuccess: (User) -> Unit,
         onError: (String) -> Unit
     ) {
-        val webClientId = "58321223762-5k3m41pk23hm52doo8fnuktnt4dgurg5.apps.googleusercontent.com"
+        val webClientId = runCatching { activityContext.getString(R.string.default_web_client_id) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?: "58321223762-5k3m41pk23hm52doo8fnuktnt4dgurg5.apps.googleusercontent.com"
 
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
             .setServerClientId(webClientId)
-            .setAutoSelectEnabled(true)
+            .setAutoSelectEnabled(false)
             .build()
 
         val request = GetCredentialRequest.Builder()
@@ -97,7 +100,7 @@ class AuthRepository(private val context: Context) {
                             val fbUser = currentAuth.currentUser
                             val user = User(
                                 uid = fbUser?.uid ?: "user_${System.currentTimeMillis() % 100000}",
-                                displayName = fbUser?.displayName ?: googleIdTokenCredential.displayName ?: "Family User",
+                                displayName = fbUser?.displayName ?: googleIdTokenCredential.displayName ?: "User",
                                 email = fbUser?.email ?: googleIdTokenCredential.id ?: "",
                                 photoUrl = fbUser?.photoUrl?.toString() ?: googleIdTokenCredential.profilePictureUri?.toString() ?: "",
                                 isOnline = true,
@@ -113,58 +116,21 @@ class AuthRepository(private val context: Context) {
                         }
                     }
                 } else {
-                    val user = User(
-                        uid = "user_${System.currentTimeMillis() % 100000}",
-                        displayName = googleIdTokenCredential.displayName ?: "Family User",
-                        email = googleIdTokenCredential.id ?: "",
-                        photoUrl = googleIdTokenCredential.profilePictureUri?.toString() ?: "",
-                        isOnline = true,
-                        lastSeen = System.currentTimeMillis()
-                    )
-                    _currentUserState.value = user
-                    syncUserToFirebase(user)
-                    onSuccess(user)
+                    onError("Firebase Auth service is unavailable")
                 }
             } else {
-                val failureMsg = "Unsupported credential response type: ${credential.type}"
+                val failureMsg = "Google Sign-In failed to return a valid credential."
                 Log.e("AuthRepository", failureMsg)
-                signInWithCustomName("Google User") { onSuccess(_currentUserState.value!!) }
+                onError(failureMsg)
             }
         } catch (e: Exception) {
             Log.e("AuthRepository", "Google Credential Manager Sign-In failed: ${e.message}", e)
             if (e is GetCredentialCancellationException) {
-                onError("Google Sign-In cancelled")
+                onError("Google Sign-In was cancelled by user")
             } else {
-                Log.w("AuthRepository", "Google Sign-In Credential error (code 10 / developer console setup). Performing fallback sign-in...")
-                val currentAuth = auth
-                if (currentAuth != null) {
-                    currentAuth.signInAnonymously().addOnCompleteListener { task ->
-                        val fbUser = currentAuth.currentUser
-                        val fallbackUser = User(
-                            uid = fbUser?.uid ?: "user_${System.currentTimeMillis() % 100000}",
-                            displayName = "Google User",
-                            email = fbUser?.email ?: "google.user@familycall.app",
-                            photoUrl = "",
-                            isOnline = true,
-                            lastSeen = System.currentTimeMillis()
-                        )
-                        _currentUserState.value = fallbackUser
-                        syncUserToFirebase(fallbackUser)
-                        onSuccess(fallbackUser)
-                    }
-                } else {
-                    val fallbackUser = User(
-                        uid = "user_${System.currentTimeMillis() % 100000}",
-                        displayName = "Google User",
-                        email = "google.user@familycall.app",
-                        photoUrl = "",
-                        isOnline = true,
-                        lastSeen = System.currentTimeMillis()
-                    )
-                    _currentUserState.value = fallbackUser
-                    syncUserToFirebase(fallbackUser)
-                    onSuccess(fallbackUser)
-                }
+                val errorDetails = e.localizedMessage ?: "Google Sign-In error"
+                Log.e("AuthRepository", "Google Sign-In error: $errorDetails")
+                onError("Google Sign-In issue: $errorDetails")
             }
         }
     }
