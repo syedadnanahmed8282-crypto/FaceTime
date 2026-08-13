@@ -1,6 +1,8 @@
 {
-  "name": "FaceTime",
-  "description": "Premium, aesthetic lightweight real-time chat & Agora calling app.",
+  "name": "Family Call App",
+  "description": "Video call and chat application with Firebase integration",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
