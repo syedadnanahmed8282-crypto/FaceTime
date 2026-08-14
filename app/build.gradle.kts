@@ -34,19 +34,29 @@ android {
 
   signingConfigs {
     getByName("debug") {
-      val ksFile = file("debug.keystore").takeIf { it.exists() }
+      val customKs = file("${rootDir}/facetime-upload.keystore").takeIf { it.exists() }
+        ?: file("facetime-upload.keystore").takeIf { it.exists() }
+        ?: file("debug.keystore").takeIf { it.exists() }
         ?: file("${rootDir}/debug.keystore").takeIf { it.exists() }
-      storeFile = ksFile ?: file("debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+
+      if (customKs != null && customKs.name.contains("facetime-upload")) {
+        storeFile = customKs
+        storePassword = "facetime123456"
+        keyAlias = "facetime"
+        keyPassword = "facetime123456"
+      } else {
+        storeFile = customKs ?: file("debug.keystore")
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
     }
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
+      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/facetime-upload.keystore"
       storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+      storePassword = System.getenv("STORE_PASSWORD") ?: "facetime123456"
+      keyAlias = System.getenv("KEY_ALIAS") ?: "facetime"
+      keyPassword = System.getenv("KEY_PASSWORD") ?: "facetime123456"
     }
   }
 

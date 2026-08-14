@@ -17,8 +17,8 @@ build/
 local.properties
 .env
 
-# Explicitly track key configuration and keystore files
-!google-services.json
-!debug.keystore
-!app/google-services.json
-!app/debug.keystore
+# Custom Keystore files (do not commit binary keystore)
+*.keystore
+*.jks
+facetime-upload.keystore
+app/facetime-upload.keystore
