@@ -11,41 +11,38 @@ plugins {
 
 android {
     namespace = "com.example"
-    compileSdk { version = release(36) { minorApiLevel = 1 } }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.familycallapp"
         minSdk = 24
         targetSdk = 36
+
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner =
+            "androidx.test.runner.AndroidJUnitRunner"
     }
 
     splits {
         abi {
             isEnable = true
             reset()
-            include("arm64-v8a", "armeabi-v7a")
+
+            include(
+                "arm64-v8a",
+                "armeabi-v7a"
+            )
+
             isUniversalApk = false
         }
     }
 
-    /*
-     * CUSTOM KEYSTORE SIGNING
-     *
-     * GitHub Actions restores:
-     * app/facetime-upload.keystore
-     *
-     * The same keystore is used for the debug APK,
-     * so the SHA-1 remains consistent with Firebase.
-     */
     signingConfigs {
         getByName("debug") {
-            val customKeystore = file(
-                "${project.projectDir}/facetime-upload.keystore"
-            )
+            val customKeystore =
+                file("${project.projectDir}/facetime-upload.keystore")
 
             if (!customKeystore.exists()) {
                 throw GradleException(
@@ -98,29 +95,28 @@ android {
     }
 
     buildTypes {
-        release {
-            isCrunchPngs = true
-            isMinifyEnabled = true
-            isShrinkResources = true
+        debug {
+            isMinifyEnabled = false
+            isShrinkResources = false
 
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig =
+                signingConfigs.getByName("debug")
         }
 
-        debug {
+        release {
             isMinifyEnabled = true
             isShrinkResources = true
+            isCrunchPngs = true
 
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
+                getDefaultProguardFile(
+                    "proguard-android-optimize.txt"
+                ),
                 "proguard-rules.pro"
             )
 
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig =
+                signingConfigs.getByName("release")
         }
     }
 
@@ -142,8 +138,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     buildFeatures {
@@ -163,20 +159,24 @@ android {
     }
 }
 
-// Configure the Secrets Gradle Plugin to use .env and .env.example files
 secrets {
     propertiesFileName = ".env"
     defaultPropertiesFileName = ".env.example"
-    ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
+
+    ignoreList.add(
+        "FIREBASE_APPCHECK_DEBUG_TOKEN"
+    )
 }
 
 googleServices {
-    missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN
+    missingGoogleServicesStrategy =
+        MissingGoogleServicesStrategy.WARN
 }
 
 dependencies {
+
+    // Compose
     implementation(platform(libs.androidx.compose.bom))
-    implementation(platform(libs.firebase.bom))
 
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material.icons.core)
@@ -187,60 +187,93 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
 
+    // Lifecycle & Navigation
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
 
-    implementation(libs.androidx.room.ktx)
+    // Room
     implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
 
-    implementation(libs.coil.compose)
+    // Networking
+    implementation(libs.retrofit)
     implementation(libs.converter.moshi)
+    implementation(libs.okhttp)
+    implementation(libs.logging.interceptor)
+
+    // Moshi
+    implementation(libs.moshi.kotlin)
+
+    // Coil
+    implementation(libs.coil.compose)
+
+    // Coroutines
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.core)
+
+    // Firebase
+    implementation(platform(libs.firebase.bom))
 
     implementation(libs.firebase.ai)
     implementation(libs.firebase.database)
     implementation(libs.firebase.messaging)
-
-    // Firebase Auth and Google Sign-In via Credential Manager
     implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.appcheck.recaptcha)
+
+    // Google Sign-In / Credential Manager
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services)
     implementation(libs.googleid)
 
+    // Agora
     implementation(libs.agora.rtc)
-    implementation(libs.firebase.appcheck.recaptcha)
 
-    implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.kotlinx.coroutines.core)
-
-    implementation(libs.logging.interceptor)
-    implementation(libs.moshi.kotlin)
-    implementation(libs.okhttp)
-    implementation(libs.retrofit)
-
-    testImplementation(libs.androidx.compose.ui.test.junit4)
-    testImplementation(libs.androidx.core)
-    testImplementation(libs.androidx.junit)
+    // Tests
     testImplementation(libs.junit)
+    testImplementation(libs.androidx.junit)
+    testImplementation(libs.androidx.core)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
+
+    testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.junit.rule)
 
+    // Android Tests
     androidTestImplementation(
         platform(libs.androidx.compose.bom)
     )
 
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.runner)
+    androidTestImplementation(
+        libs.androidx.compose.ui.test.junit4
+    )
 
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
-    debugImplementation(libs.androidx.compose.ui.tooling)
+    androidTestImplementation(
+        libs.androidx.espresso.core
+    )
 
-    "ksp"(libs.androidx.room.compiler)
-    "ksp"(libs.moshi.kotlin.codegen)
+    androidTestImplementation(
+        libs.androidx.junit
+    )
+
+    androidTestImplementation(
+        libs.androidx.runner
+    )
+
+    // Debug
+    debugImplementation(
+        libs.androidx.compose.ui.test.manifest
+    )
+
+    debugImplementation(
+        libs.androidx.compose.ui.tooling
+    )
+
+    // KSP
+    ksp(libs.androidx.room.compiler)
+    ksp(libs.moshi.kotlin.codegen)
 }
