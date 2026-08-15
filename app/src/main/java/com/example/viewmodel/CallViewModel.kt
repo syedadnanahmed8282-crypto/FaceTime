@@ -5,20 +5,36 @@ import androidx.lifecycle.viewModelScope
 import com.example.agora.AgoraManager
 import com.example.data.CallRepository
 import com.example.model.CallSession
+import com.example.model.User
 import com.example.utils.AudioRingHelper
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class CallViewModel(
     val repository: CallRepository,
     val agoraManager: AgoraManager,
-    val audioRingHelper: AudioRingHelper? = null
+    val audioRingHelper: AudioRingHelper? = null,
+    val currentUserFlow: StateFlow<User?> = MutableStateFlow(null)
 ) : ViewModel() {
 
     private val _currentCall = MutableStateFlow<CallSession?>(null)
     val currentCall: StateFlow<CallSession?> = _currentCall.asStateFlow()
+
+    val incomingCall: StateFlow<CallSession?> = currentUserFlow.flatMapLatest { user ->
+        if (user != null && user.uid.isNotBlank()) {
+            repository.listenForIncomingCalls(user.uid)
+        } else {
+            flowOf(null)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val isJoined: StateFlow<Boolean> = agoraManager.isJoined
     val remoteUid: StateFlow<Int?> = agoraManager.remoteUid

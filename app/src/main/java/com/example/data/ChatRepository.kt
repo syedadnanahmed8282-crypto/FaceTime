@@ -14,7 +14,11 @@ import kotlinx.coroutines.flow.callbackFlow
 
 class ChatRepository {
 
-    private val database: FirebaseDatabase? = runCatching { FirebaseDatabase.getInstance() }.getOrNull()
+    private val database: FirebaseDatabase? = runCatching {
+        FirebaseDatabase.getInstance("https://callapp-119cd-default-rtdb.firebaseio.com")
+    }.recoverCatching {
+        FirebaseDatabase.getInstance()
+    }.getOrNull()
 
     // Local in-memory storage fallback for offline/demo operation
     private val localChatsMap = mutableMapOf<String, MutableStateFlow<List<ChatMessage>>>()
@@ -28,48 +32,44 @@ class ChatRepository {
         val db = database
 
         if (db == null) {
-            // In-memory local flow fallback
             val stateFlow = localChatsMap.getOrPut(chatId) {
-                MutableStateFlow(getSampleInitialMessages(currentUserId, otherUserId))
+                MutableStateFlow(emptyList())
             }
             trySend(stateFlow.value)
             awaitClose { }
             return@callbackFlow
         }
 
-        val ref = db.getReference(Constants.NODE_CHATS).child(chatId)
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val messages = mutableListOf<ChatMessage>()
-                for (child in snapshot.children) {
-                    val msg = child.getValue(ChatMessage::class.java)
-                    if (msg != null) {
-                        messages.add(msg)
-                        // Auto-mark as delivered if received by current user
-                        if (msg.receiverId == currentUserId && msg.status == ChatMessage.STATUS_SENT) {
-                            child.ref.child("status").setValue(ChatMessage.STATUS_DELIVERED)
+        try {
+            val ref = db.getReference(Constants.NODE_CHATS).child(chatId)
+            val listener = object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val messages = mutableListOf<ChatMessage>()
+                    for (child in snapshot.children) {
+                        val msg = child.getValue(ChatMessage::class.java)
+                        if (msg != null) {
+                            messages.add(msg)
+                            // Auto-mark as delivered if received by current user
+                            if (msg.receiverId == currentUserId && msg.status == ChatMessage.STATUS_SENT) {
+                                child.ref.child("status").setValue(ChatMessage.STATUS_DELIVERED)
+                            }
                         }
                     }
-                }
-                if (messages.isEmpty() && (currentUserId.startsWith("demo_") || otherUserId.startsWith("demo_"))) {
-                    // Populate initial sample conversation for demo users
-                    val samples = getSampleInitialMessages(currentUserId, otherUserId)
-                    samples.forEach { sampleMsg ->
-                        ref.child(sampleMsg.id).setValue(sampleMsg)
-                    }
-                    trySend(samples)
-                } else {
                     trySend(messages)
                 }
+
+                override fun onCancelled(error: DatabaseError) {
+                    Log.e("ChatRepository", "Chat sync cancelled: ${error.message}")
+                }
             }
 
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("ChatRepository", "Chat sync cancelled: ${error.message}")
-            }
+            ref.addValueEventListener(listener)
+            awaitClose { ref.removeEventListener(listener) }
+        } catch (t: Throwable) {
+            Log.e("ChatRepository", "getMessagesFlow note: ${t.message}")
+            trySend(emptyList())
+            awaitClose { }
         }
-
-        ref.addValueEventListener(listener)
-        awaitClose { ref.removeEventListener(listener) }
     }
 
     fun sendMessage(
@@ -94,11 +94,13 @@ class ChatRepository {
 
         val db = database
         if (db != null) {
-            runCatching {
+            try {
                 val ref = db.getReference(Constants.NODE_CHATS)
                     .child(chatId)
                     .child(msgId)
                 ref.setValue(message)
+            } catch (t: Throwable) {
+                Log.e("ChatRepository", "sendMessage note: ${t.message}")
             }
         } else {
             val stateFlow = localChatsMap.getOrPut(chatId) {
@@ -114,24 +116,28 @@ class ChatRepository {
         val chatId = getChatId(senderId, receiverId)
         val db = database
         if (db != null) {
-            val reactionRef = db.getReference(Constants.NODE_CHATS)
-                .child(chatId)
-                .child(messageId)
-                .child("reactions")
-                .child(currentUserId)
+            try {
+                val reactionRef = db.getReference(Constants.NODE_CHATS)
+                    .child(chatId)
+                    .child(messageId)
+                    .child("reactions")
+                    .child(currentUserId)
 
-            reactionRef.addListenerForSingleValueEvent(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    val existing = snapshot.getValue(String::class.java)
-                    if (existing == emoji) {
-                        reactionRef.removeValue() // Remove if tapped again
-                    } else {
-                        reactionRef.setValue(emoji)
+                reactionRef.addListenerForSingleValueEvent(object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        val existing = snapshot.getValue(String::class.java)
+                        if (existing == emoji) {
+                            reactionRef.removeValue()
+                        } else {
+                            reactionRef.setValue(emoji)
+                        }
                     }
-                }
 
-                override fun onCancelled(error: DatabaseError) {}
-            })
+                    override fun onCancelled(error: DatabaseError) {}
+                })
+            } catch (t: Throwable) {
+                Log.e("ChatRepository", "toggleReaction note: ${t.message}")
+            }
         } else {
             val stateFlow = localChatsMap[chatId] ?: return
             val list = stateFlow.value.toMutableList()
@@ -148,36 +154,5 @@ class ChatRepository {
                 stateFlow.value = list
             }
         }
-    }
-
-    private fun getSampleInitialMessages(myId: String, otherId: String): List<ChatMessage> {
-        val now = System.currentTimeMillis()
-        return listOf(
-            ChatMessage(
-                id = "sample_1",
-                senderId = otherId,
-                receiverId = myId,
-                messageText = "Hey there! Welcome to FaceTime. Ready for an Agora video call?",
-                timestamp = now - 300000,
-                status = ChatMessage.STATUS_DELIVERED
-            ),
-            ChatMessage(
-                id = "sample_2",
-                senderId = myId,
-                receiverId = otherId,
-                messageText = "Hi! Yes, the UI looks super sleek in Dark Royal Blue & Cyan ⚡",
-                timestamp = now - 180000,
-                status = ChatMessage.STATUS_DELIVERED,
-                reactions = mapOf(otherId to "❤️")
-            ),
-            ChatMessage(
-                id = "sample_3",
-                senderId = otherId,
-                receiverId = myId,
-                messageText = "Tap the top right camera icon anytime to test crystal clear 1-on-1 video calling!",
-                timestamp = now - 60000,
-                status = ChatMessage.STATUS_DELIVERED
-            )
-        )
     }
 }

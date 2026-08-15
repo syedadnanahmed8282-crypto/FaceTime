@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -59,16 +60,25 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        try {
+            audioRingHelper = AudioRingHelper(applicationContext)
+            authRepository = AuthRepository(applicationContext)
+            chatRepository = ChatRepository()
+            callRepository = CallRepository()
+            agoraManager = AgoraManager(applicationContext)
+
+            authViewModel = AuthViewModel(authRepository)
+            callViewModel = CallViewModel(
+                repository = callRepository,
+                agoraManager = agoraManager,
+                audioRingHelper = audioRingHelper,
+                currentUserFlow = authViewModel.currentUser
+            )
+        } catch (t: Throwable) {
+            Log.e("MainActivity", "Initialization error: ${t.message}", t)
+        }
+
         requestCallPermissions()
-
-        audioRingHelper = AudioRingHelper(applicationContext)
-        authRepository = AuthRepository(applicationContext)
-        chatRepository = ChatRepository()
-        callRepository = CallRepository()
-        agoraManager = AgoraManager(applicationContext)
-
-        authViewModel = AuthViewModel(authRepository)
-        callViewModel = CallViewModel(callRepository, agoraManager, audioRingHelper)
 
         setContent {
             FaceTimeTheme {
@@ -78,10 +88,7 @@ class MainActivity : ComponentActivity() {
                 val myContacts by authViewModel.myContacts.collectAsState()
                 val contactRequests by authViewModel.contactRequests.collectAsState()
 
-                val incomingCallState = currentUser?.uid?.let { uid ->
-                    callRepository.listenForIncomingCalls(uid).collectAsState(initial = null).value
-                }
-
+                val incomingCallState by callViewModel.incomingCall.collectAsState()
                 val currentCall by callViewModel.currentCall.collectAsState()
                 val isMuted by callViewModel.isMuted.collectAsState()
                 val isVideoDisabled by callViewModel.isVideoDisabled.collectAsState()
@@ -90,21 +97,23 @@ class MainActivity : ComponentActivity() {
 
                 // Trigger ringtone on incoming call
                 LaunchedEffect(incomingCallState) {
-                    if (incomingCallState != null && currentCall == null) {
-                        callViewModel.onIncomingCallReceived(incomingCallState)
+                    val incoming = incomingCallState
+                    if (incoming != null && currentCall == null) {
+                        callViewModel.onIncomingCallReceived(incoming)
                     }
                 }
 
                 // Automatic navigation to CallScreen or IncomingCallScreen when call is active
                 LaunchedEffect(currentCall, incomingCallState) {
                     val activeCall = currentCall
+                    val incoming = incomingCallState
                     if (activeCall != null && (activeCall.status == CallSession.STATUS_RINGING || activeCall.status == CallSession.STATUS_ACCEPTED)) {
                         if (navController.currentDestination?.route != "call") {
                             navController.navigate("call") {
                                 launchSingleTop = true
                             }
                         }
-                    } else if (incomingCallState != null && activeCall == null) {
+                    } else if (incoming != null && activeCall == null) {
                         if (navController.currentDestination?.route != "incoming_call") {
                             navController.navigate("incoming_call") {
                                 launchSingleTop = true
@@ -113,15 +122,22 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                val startDestination = if (currentUser != null) "home" else "login"
-
                 NavHost(
                     navController = navController,
-                    startDestination = startDestination,
+                    startDestination = if (currentUser != null) "home" else "login",
                     modifier = Modifier.fillMaxSize()
                 ) {
                     composable("login") {
                         val context = LocalContext.current
+                        
+                        LaunchedEffect(currentUser) {
+                            if (currentUser != null) {
+                                navController.navigate("home") {
+                                    popUpTo("login") { inclusive = true }
+                                }
+                            }
+                        }
+
                         LoginScreen(
                             onGoogleSignInClick = {
                                 authViewModel.signInWithGoogle(
@@ -132,7 +148,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     },
                                     onError = { errorMsg ->
-                                        Toast.makeText(context, "Google Sign-In Notice: $errorMsg", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, "Google Sign-In: $errorMsg", Toast.LENGTH_LONG).show()
                                     }
                                 )
                             },
@@ -420,7 +436,11 @@ class MainActivity : ComponentActivity() {
         }
 
         if (missing.isNotEmpty()) {
-            permissionLauncher.launch(missing.toTypedArray())
+            try {
+                permissionLauncher.launch(missing.toTypedArray())
+            } catch (t: Throwable) {
+                Log.e("MainActivity", "Permission request note: ${t.message}")
+            }
         }
     }
 

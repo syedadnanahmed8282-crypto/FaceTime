@@ -8,7 +8,6 @@ import android.view.SurfaceView
 import androidx.core.content.ContextCompat
 import com.example.agora.token.RtcTokenBuilder
 import com.example.utils.Constants
-import io.agora.rtc2.Constants as AgoraConstants
 import io.agora.rtc2.IRtcEngineEventHandler
 import io.agora.rtc2.RtcEngine
 import io.agora.rtc2.RtcEngineConfig
@@ -18,7 +17,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import okhttp3.OkHttpClient
 
 class AgoraManager(private val context: Context) {
 
@@ -62,25 +60,27 @@ class AgoraManager(private val context: Context) {
         }
     }
 
-    init {
-        initEngine()
-    }
+    private fun ensureEngine(): RtcEngine? {
+        if (rtcEngine != null) return rtcEngine
 
-    private fun initEngine() {
         val appId = Constants.AGORA_APP_ID
         if (appId.isBlank() || appId == "YOUR_AGORA_APP_ID_HERE") {
-            Log.w("AgoraManager", "Agora App ID is not configured. App will run in simulated call UI mode.")
-            return
+            Log.w("AgoraManager", "Agora App ID is not configured. Running in simulated call mode.")
+            return null
         }
 
-        runCatching {
+        return try {
             val config = RtcEngineConfig()
             config.mContext = context.applicationContext
             config.mAppId = appId
             config.mEventHandler = eventHandler
-            rtcEngine = RtcEngine.create(config)
-        }.onFailure {
-            Log.e("AgoraManager", "Failed to initialize Agora RTC Engine safely: ${it.message}")
+            val engine = RtcEngine.create(config)
+            rtcEngine = engine
+            Log.d("AgoraManager", "Agora RTC Engine created successfully")
+            engine
+        } catch (t: Throwable) {
+            Log.e("AgoraManager", "Failed to initialize Agora RTC Engine safely: ${t.message}", t)
+            null
         }
     }
 
@@ -95,24 +95,24 @@ class AgoraManager(private val context: Context) {
             return
         }
 
-        runCatching {
-            rtcEngine?.let { engine ->
+        try {
+            ensureEngine()?.let { engine ->
                 engine.enableVideo()
                 engine.setupLocalVideo(VideoCanvas(surfaceView, VideoCanvas.RENDER_MODE_HIDDEN, 0))
                 engine.startPreview()
             }
-        }.onFailure {
-            Log.e("AgoraManager", "Failed to setup local video preview: ${it.message}")
+        } catch (t: Throwable) {
+            Log.e("AgoraManager", "Failed to setup local video preview: ${t.message}", t)
         }
     }
 
     fun setupRemoteVideo(surfaceView: SurfaceView, uid: Int) {
-        runCatching {
-            rtcEngine?.let { engine ->
+        try {
+            ensureEngine()?.let { engine ->
                 engine.setupRemoteVideo(VideoCanvas(surfaceView, VideoCanvas.RENDER_MODE_HIDDEN, uid))
             }
-        }.onFailure {
-            Log.e("AgoraManager", "Failed to setup remote video: ${it.message}")
+        } catch (t: Throwable) {
+            Log.e("AgoraManager", "Failed to setup remote video: ${t.message}", t)
         }
     }
 
@@ -121,8 +121,9 @@ class AgoraManager(private val context: Context) {
             val token = generateDynamicToken(channelId, userUid)
             
             CoroutineScope(Dispatchers.Main).launch {
-                runCatching {
-                    rtcEngine?.let { engine ->
+                try {
+                    val engine = ensureEngine()
+                    if (engine != null) {
                         if (isVideo) {
                             val hasCameraPermission = ContextCompat.checkSelfPermission(
                                 context,
@@ -138,14 +139,13 @@ class AgoraManager(private val context: Context) {
                         engine.enableAudio()
                         engine.setEnableSpeakerphone(true)
                         
-                        // Join channel with dynamic RTC token
                         val result = engine.joinChannel(token, channelId, "", userUid)
                         Log.d("AgoraManager", "joinChannel result code: $result with channel: $channelId, uid: $userUid")
-                    } ?: run {
+                    } else {
                         _isJoined.value = true
                     }
-                }.onFailure {
-                    Log.e("AgoraManager", "joinCallChannel error: ${it.message}")
+                } catch (t: Throwable) {
+                    Log.e("AgoraManager", "joinCallChannel error: ${t.message}", t)
                     _isJoined.value = true
                 }
                 onComplete()
@@ -177,8 +177,8 @@ class AgoraManager(private val context: Context) {
             )
             Log.d("AgoraManager", "Generated dynamic RTC token locally for channel: $channelId")
             token
-        } catch (e: Exception) {
-            Log.e("AgoraManager", "Local token generation failed: ${e.message}")
+        } catch (t: Throwable) {
+            Log.e("AgoraManager", "Local token generation note: ${t.message}")
             null
         }
     }
@@ -186,8 +186,10 @@ class AgoraManager(private val context: Context) {
     fun toggleMute(): Boolean {
         val newMuted = !_isMuted.value
         _isMuted.value = newMuted
-        runCatching {
+        try {
             rtcEngine?.muteLocalAudioStream(newMuted)
+        } catch (t: Throwable) {
+            Log.e("AgoraManager", "toggleMute note: ${t.message}")
         }
         return newMuted
     }
@@ -195,36 +197,44 @@ class AgoraManager(private val context: Context) {
     fun toggleVideo(): Boolean {
         val newDisabled = !_isVideoDisabled.value
         _isVideoDisabled.value = newDisabled
-        runCatching {
+        try {
             rtcEngine?.muteLocalVideoStream(newDisabled)
             if (newDisabled) {
                 rtcEngine?.stopPreview()
             } else {
                 rtcEngine?.startPreview()
             }
+        } catch (t: Throwable) {
+            Log.e("AgoraManager", "toggleVideo note: ${t.message}")
         }
         return newDisabled
     }
 
     fun switchCamera() {
-        runCatching {
+        try {
             rtcEngine?.switchCamera()
+        } catch (t: Throwable) {
+            Log.e("AgoraManager", "switchCamera note: ${t.message}")
         }
     }
 
     fun toggleSpeaker(): Boolean {
         val newSpeaker = !_isSpeakerOn.value
         _isSpeakerOn.value = newSpeaker
-        runCatching {
+        try {
             rtcEngine?.setEnableSpeakerphone(newSpeaker)
+        } catch (t: Throwable) {
+            Log.e("AgoraManager", "toggleSpeaker note: ${t.message}")
         }
         return newSpeaker
     }
 
     fun leaveCall() {
-        runCatching {
+        try {
             rtcEngine?.stopPreview()
             rtcEngine?.leaveChannel()
+        } catch (t: Throwable) {
+            Log.e("AgoraManager", "leaveCall note: ${t.message}")
         }
         _isJoined.value = false
         _remoteUid.value = null
@@ -234,8 +244,10 @@ class AgoraManager(private val context: Context) {
 
     fun destroyEngine() {
         leaveCall()
-        runCatching {
+        try {
             RtcEngine.destroy()
+        } catch (t: Throwable) {
+            Log.e("AgoraManager", "destroyEngine note: ${t.message}")
         }
         rtcEngine = null
     }

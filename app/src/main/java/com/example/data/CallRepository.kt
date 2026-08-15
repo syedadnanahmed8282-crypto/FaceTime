@@ -14,7 +14,11 @@ import kotlinx.coroutines.flow.callbackFlow
 
 class CallRepository {
 
-    private val database: FirebaseDatabase? = runCatching { FirebaseDatabase.getInstance() }.getOrNull()
+    private val database: FirebaseDatabase? = runCatching {
+        FirebaseDatabase.getInstance("https://callapp-119cd-default-rtdb.firebaseio.com")
+    }.recoverCatching {
+        FirebaseDatabase.getInstance()
+    }.getOrNull()
 
     // Active local call state fallback
     private val activeCallState = MutableStateFlow<CallSession?>(null)
@@ -45,11 +49,11 @@ class CallRepository {
 
         val db = database
         if (db != null) {
-            runCatching {
+            try {
                 val ref = db.getReference(Constants.NODE_CALLS).child(callId)
                 ref.setValue(session)
-            }.onFailure {
-                Log.e("CallRepository", "Failed to register call in Firebase: ${it.message}")
+            } catch (t: Throwable) {
+                Log.e("CallRepository", "Failed to register call in Firebase: ${t.message}")
             }
         }
 
@@ -64,11 +68,13 @@ class CallRepository {
 
         val db = database
         if (db != null) {
-            runCatching {
+            try {
                 db.getReference(Constants.NODE_CALLS)
                     .child(callId)
                     .child("status")
                     .setValue(newStatus)
+            } catch (t: Throwable) {
+                Log.e("CallRepository", "updateCallStatus note: ${t.message}")
             }
         }
     }
@@ -86,29 +92,35 @@ class CallRepository {
             return@callbackFlow
         }
 
-        val ref = db.getReference(Constants.NODE_CALLS)
-        val query = ref.orderByChild("receiverId").equalTo(currentUserId)
+        try {
+            val ref = db.getReference(Constants.NODE_CALLS)
+            val query = ref.orderByChild("receiverId").equalTo(currentUserId)
 
-        val valueListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                var activeIncoming: CallSession? = null
-                for (child in snapshot.children) {
-                    val session = child.getValue(CallSession::class.java)
-                    if (session != null && session.status == CallSession.STATUS_RINGING) {
-                        activeIncoming = session
-                        break
+            val valueListener = object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    var activeIncoming: CallSession? = null
+                    for (child in snapshot.children) {
+                        val session = child.getValue(CallSession::class.java)
+                        if (session != null && session.status == CallSession.STATUS_RINGING) {
+                            activeIncoming = session
+                            break
+                        }
                     }
+                    trySend(activeIncoming)
                 }
-                trySend(activeIncoming)
+
+                override fun onCancelled(error: DatabaseError) {
+                    trySend(null)
+                }
             }
 
-            override fun onCancelled(error: DatabaseError) {
-                trySend(null)
-            }
+            query.addValueEventListener(valueListener)
+            awaitClose { query.removeEventListener(valueListener) }
+        } catch (t: Throwable) {
+            Log.e("CallRepository", "listenForIncomingCalls note: ${t.message}")
+            trySend(null)
+            awaitClose { }
         }
-
-        query.addValueEventListener(valueListener)
-        awaitClose { query.removeEventListener(valueListener) }
     }
 
     fun listenToCallSession(callId: String): Flow<CallSession?> = callbackFlow {
@@ -119,19 +131,25 @@ class CallRepository {
             return@callbackFlow
         }
 
-        val ref = db.getReference(Constants.NODE_CALLS).child(callId)
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val session = snapshot.getValue(CallSession::class.java)
-                trySend(session)
+        try {
+            val ref = db.getReference(Constants.NODE_CALLS).child(callId)
+            val listener = object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val session = snapshot.getValue(CallSession::class.java)
+                    trySend(session)
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    trySend(null)
+                }
             }
 
-            override fun onCancelled(error: DatabaseError) {
-                trySend(null)
-            }
+            ref.addValueEventListener(listener)
+            awaitClose { ref.removeEventListener(listener) }
+        } catch (t: Throwable) {
+            Log.e("CallRepository", "listenToCallSession note: ${t.message}")
+            trySend(null)
+            awaitClose { }
         }
-
-        ref.addValueEventListener(listener)
-        awaitClose { ref.removeEventListener(listener) }
     }
 }

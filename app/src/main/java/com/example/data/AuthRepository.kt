@@ -6,7 +6,6 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.exceptions.GetCredentialException
 import com.example.R
 import com.example.model.ContactRequest
 import com.example.model.User
@@ -28,7 +27,11 @@ import kotlinx.coroutines.flow.callbackFlow
 class AuthRepository(private val context: Context) {
 
     private val auth: FirebaseAuth? = runCatching { FirebaseAuth.getInstance() }.getOrNull()
-    private val database: FirebaseDatabase? = runCatching { FirebaseDatabase.getInstance() }.getOrNull()
+    private val database: FirebaseDatabase? = runCatching {
+        FirebaseDatabase.getInstance("https://callapp-119cd-default-rtdb.firebaseio.com")
+    }.recoverCatching {
+        FirebaseDatabase.getInstance()
+    }.getOrNull()
 
     private val _currentUserState = MutableStateFlow<User?>(null)
     val currentUserState: StateFlow<User?> = _currentUserState
@@ -44,19 +47,24 @@ class AuthRepository(private val context: Context) {
     }
 
     fun checkCurrentSession() {
-        val fbUser = auth?.currentUser
-        if (fbUser != null) {
-            val user = User(
-                uid = fbUser.uid,
-                displayName = fbUser.displayName ?: "FaceTime User",
-                email = fbUser.email ?: "",
-                photoUrl = fbUser.photoUrl?.toString() ?: "",
-                isOnline = true,
-                lastSeen = System.currentTimeMillis()
-            )
-            _currentUserState.value = user
-            syncUserToFirebase(user)
-        } else {
+        try {
+            val fbUser = auth?.currentUser
+            if (fbUser != null) {
+                val user = User(
+                    uid = fbUser.uid,
+                    displayName = fbUser.displayName ?: "FaceTime User",
+                    email = fbUser.email ?: "",
+                    photoUrl = fbUser.photoUrl?.toString() ?: "",
+                    isOnline = true,
+                    lastSeen = System.currentTimeMillis()
+                )
+                _currentUserState.value = user
+                syncUserToFirebase(user)
+            } else {
+                _currentUserState.value = null
+            }
+        } catch (t: Throwable) {
+            Log.e("AuthRepository", "checkCurrentSession note: ${t.message}")
             _currentUserState.value = null
         }
     }
@@ -182,7 +190,7 @@ class AuthRepository(private val context: Context) {
     fun syncUserToFirebase(user: User) {
         val db = database ?: return
         if (user.uid.isEmpty()) return
-        runCatching {
+        try {
             val userRef = db.getReference(Constants.NODE_USERS).child(user.uid)
             val map = mapOf(
                 "uid" to user.uid,
@@ -194,8 +202,8 @@ class AuthRepository(private val context: Context) {
                 "lastSeen" to System.currentTimeMillis()
             )
             userRef.updateChildren(map)
-        }.onFailure {
-            Log.e("AuthRepository", "Firebase sync failed: ${it.message}")
+        } catch (t: Throwable) {
+            Log.e("AuthRepository", "Firebase sync failed: ${t.message}")
         }
     }
 
@@ -219,11 +227,13 @@ class AuthRepository(private val context: Context) {
         _currentUserState.value = updated
         val db = database
         if (db != null && current.uid.isNotEmpty()) {
-            runCatching {
+            try {
                 val presenceRef = db.getReference(Constants.NODE_USERS)
                     .child(current.uid)
                 presenceRef.child("isOnline").setValue(isOnline)
                 presenceRef.child("lastSeen").setValue(System.currentTimeMillis())
+            } catch (t: Throwable) {
+                Log.e("AuthRepository", "setPresence error: ${t.message}")
             }
         }
     }
@@ -236,27 +246,33 @@ class AuthRepository(private val context: Context) {
             return@callbackFlow
         }
 
-        val ref = db.getReference(Constants.NODE_USERS)
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val list = mutableListOf<User>()
-                val myUid = _currentUserState.value?.uid
-                for (child in snapshot.children) {
-                    val user = child.getValue(User::class.java)
-                    if (user != null && user.uid != myUid) {
-                        list.add(user)
+        try {
+            val ref = db.getReference(Constants.NODE_USERS)
+            val listener = object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val list = mutableListOf<User>()
+                    val myUid = _currentUserState.value?.uid
+                    for (child in snapshot.children) {
+                        val user = child.getValue(User::class.java)
+                        if (user != null && user.uid != myUid) {
+                            list.add(user)
+                        }
                     }
+                    trySend(list)
                 }
-                trySend(list)
+
+                override fun onCancelled(error: DatabaseError) {
+                    trySend(emptyList())
+                }
             }
 
-            override fun onCancelled(error: DatabaseError) {
-                trySend(emptyList())
-            }
+            ref.addValueEventListener(listener)
+            awaitClose { ref.removeEventListener(listener) }
+        } catch (t: Throwable) {
+            Log.e("AuthRepository", "getUsersFlow error: ${t.message}")
+            trySend(emptyList())
+            awaitClose { }
         }
-
-        ref.addValueEventListener(listener)
-        awaitClose { ref.removeEventListener(listener) }
     }
 
     // Contact Management Flows
@@ -269,25 +285,30 @@ class AuthRepository(private val context: Context) {
             return@callbackFlow
         }
 
-        val ref = db.getReference(Constants.NODE_CONTACTS).child(myUid)
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val contactIds = mutableSetOf<String>()
-                for (child in snapshot.children) {
-                    if (child.getValue(Boolean::class.java) == true) {
-                        contactIds.add(child.key ?: "")
+        try {
+            val ref = db.getReference(Constants.NODE_CONTACTS).child(myUid)
+            val listener = object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val contactIds = mutableSetOf<String>()
+                    for (child in snapshot.children) {
+                        if (child.getValue(Boolean::class.java) == true) {
+                            contactIds.add(child.key ?: "")
+                        }
                     }
+                    trySend(contactIds)
                 }
-                trySend(contactIds)
+
+                override fun onCancelled(error: DatabaseError) {
+                    trySend(emptySet())
+                }
             }
 
-            override fun onCancelled(error: DatabaseError) {
-                trySend(emptySet())
-            }
+            ref.addValueEventListener(listener)
+            awaitClose { ref.removeEventListener(listener) }
+        } catch (t: Throwable) {
+            trySend(emptySet())
+            awaitClose { }
         }
-
-        ref.addValueEventListener(listener)
-        awaitClose { ref.removeEventListener(listener) }
     }
 
     fun getContactRequestsFlow(myUid: String): Flow<List<ContactRequest>> = callbackFlow {
@@ -299,26 +320,31 @@ class AuthRepository(private val context: Context) {
             return@callbackFlow
         }
 
-        val ref = db.getReference(Constants.NODE_CONTACT_REQUESTS).child(myUid)
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val requests = mutableListOf<ContactRequest>()
-                for (child in snapshot.children) {
-                    val req = child.getValue(ContactRequest::class.java)
-                    if (req != null && req.status == "pending") {
-                        requests.add(req)
+        try {
+            val ref = db.getReference(Constants.NODE_CONTACT_REQUESTS).child(myUid)
+            val listener = object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val requests = mutableListOf<ContactRequest>()
+                    for (child in snapshot.children) {
+                        val req = child.getValue(ContactRequest::class.java)
+                        if (req != null && req.status == "pending") {
+                            requests.add(req)
+                        }
                     }
+                    trySend(requests)
                 }
-                trySend(requests)
+
+                override fun onCancelled(error: DatabaseError) {
+                    trySend(emptyList())
+                }
             }
 
-            override fun onCancelled(error: DatabaseError) {
-                trySend(emptyList())
-            }
+            ref.addValueEventListener(listener)
+            awaitClose { ref.removeEventListener(listener) }
+        } catch (t: Throwable) {
+            trySend(emptyList())
+            awaitClose { }
         }
-
-        ref.addValueEventListener(listener)
-        awaitClose { ref.removeEventListener(listener) }
     }
 
     fun sendContactRequest(myUid: String, me: User, targetUid: String) {
@@ -333,39 +359,48 @@ class AuthRepository(private val context: Context) {
             status = "pending"
         )
 
-        // Mark local side added
-        if (db != null) {
-            db.getReference(Constants.NODE_CONTACTS).child(myUid).child(targetUid).setValue(true)
-            db.getReference(Constants.NODE_CONTACT_REQUESTS).child(targetUid).child(myUid).setValue(request)
-        } else {
-            localContacts.getOrPut(myUid) { mutableSetOf() }.add(targetUid)
-            localRequests.getOrPut(targetUid) { mutableListOf() }.add(request)
+        try {
+            if (db != null) {
+                db.getReference(Constants.NODE_CONTACTS).child(myUid).child(targetUid).setValue(true)
+                db.getReference(Constants.NODE_CONTACT_REQUESTS).child(targetUid).child(myUid).setValue(request)
+            } else {
+                localContacts.getOrPut(myUid) { mutableSetOf() }.add(targetUid)
+                localRequests.getOrPut(targetUid) { mutableListOf() }.add(request)
+            }
+        } catch (t: Throwable) {
+            Log.e("AuthRepository", "sendContactRequest note: ${t.message}")
         }
     }
 
     fun acceptContactRequest(myUid: String, me: User, targetUid: String, targetUser: User?) {
         val db = database
-        if (db != null) {
-            // Both users added to each other's contacts node -> MUTUAL CONTACT == true
-            db.getReference(Constants.NODE_CONTACTS).child(myUid).child(targetUid).setValue(true)
-            db.getReference(Constants.NODE_CONTACTS).child(targetUid).child(myUid).setValue(true)
-            db.getReference(Constants.NODE_CONTACT_REQUESTS).child(myUid).child(targetUid).removeValue()
-        } else {
-            localContacts.getOrPut(myUid) { mutableSetOf() }.add(targetUid)
-            localContacts.getOrPut(targetUid) { mutableSetOf() }.add(myUid)
-            localRequests[myUid]?.removeAll { it.senderId == targetUid }
+        try {
+            if (db != null) {
+                db.getReference(Constants.NODE_CONTACTS).child(myUid).child(targetUid).setValue(true)
+                db.getReference(Constants.NODE_CONTACTS).child(targetUid).child(myUid).setValue(true)
+                db.getReference(Constants.NODE_CONTACT_REQUESTS).child(myUid).child(targetUid).removeValue()
+            } else {
+                localContacts.getOrPut(myUid) { mutableSetOf() }.add(targetUid)
+                localContacts.getOrPut(targetUid) { mutableSetOf() }.add(myUid)
+                localRequests[myUid]?.removeAll { it.senderId == targetUid }
+            }
+        } catch (t: Throwable) {
+            Log.e("AuthRepository", "acceptContactRequest note: ${t.message}")
         }
     }
 
     fun removeContact(myUid: String, targetUid: String) {
         val db = database
-        if (db != null) {
-            // Revoke mutual contact status from both users
-            db.getReference(Constants.NODE_CONTACTS).child(myUid).child(targetUid).removeValue()
-            db.getReference(Constants.NODE_CONTACTS).child(targetUid).child(myUid).removeValue()
-        } else {
-            localContacts[myUid]?.remove(targetUid)
-            localContacts[targetUid]?.remove(myUid)
+        try {
+            if (db != null) {
+                db.getReference(Constants.NODE_CONTACTS).child(myUid).child(targetUid).removeValue()
+                db.getReference(Constants.NODE_CONTACTS).child(targetUid).child(myUid).removeValue()
+            } else {
+                localContacts[myUid]?.remove(targetUid)
+                localContacts[targetUid]?.remove(myUid)
+            }
+        } catch (t: Throwable) {
+            Log.e("AuthRepository", "removeContact note: ${t.message}")
         }
     }
 
@@ -373,13 +408,21 @@ class AuthRepository(private val context: Context) {
         val chatId = if (currentUserId < otherUserId) "${currentUserId}_${otherUserId}" else "${otherUserId}_${currentUserId}"
         val db = database
         if (db != null) {
-            db.getReference(Constants.NODE_CHATS).child(chatId).removeValue()
+            try {
+                db.getReference(Constants.NODE_CHATS).child(chatId).removeValue()
+            } catch (t: Throwable) {
+                Log.e("AuthRepository", "deleteChatHistory note: ${t.message}")
+            }
         }
     }
 
     fun signOut() {
         setPresence(false)
-        auth?.signOut()
+        try {
+            auth?.signOut()
+        } catch (t: Throwable) {
+            Log.e("AuthRepository", "signOut note: ${t.message}")
+        }
         _currentUserState.value = null
     }
 }
