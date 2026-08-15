@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "58321223762",
+    "firebase_url": "https://callapp-119cd-default-rtdb.firebaseio.com",
+    "project_id": "callapp-119cd",
+    "storage_bucket": "callapp-119cd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:58321223762:android:5d588979781a372de49f8b",
+        "android_client_info": {
+          "package_name": "com.example.familycallapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "58321223762-176eaep7np5npaa9b7soll8ai3trhnfa.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.familycallapp",
+            "certificate_hash": "5131a0f0025124bbe82c757244162b6878092b92"
+          }
+        },
+        {
+          "client_id": "58321223762-5k3m41pk23hm52doo8fnuktnt4dgurg5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCpcer-1I8i0iT9iIKd2909U5agoVB0m8A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "58321223762-5k3m41pk23hm52doo8fnuktnt4dgurg5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
