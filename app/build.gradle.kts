@@ -32,10 +32,12 @@ android {
 
             include(
                 "arm64-v8a",
-                "armeabi-v7a"
+                "armeabi-v7a",
+                "x86",
+                "x86_64"
             )
 
-            isUniversalApk = false
+            isUniversalApk = true
         }
     }
 
@@ -133,7 +135,7 @@ android {
         }
 
         jniLibs {
-            useLegacyPackaging = false
+            useLegacyPackaging = true
         }
     }
 
