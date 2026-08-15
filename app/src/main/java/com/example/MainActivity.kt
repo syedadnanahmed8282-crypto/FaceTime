@@ -44,13 +44,20 @@ import com.example.viewmodel.ChatViewModel
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var authRepository: AuthRepository
-    private lateinit var chatRepository: ChatRepository
-    private lateinit var callRepository: CallRepository
-    private lateinit var agoraManager: AgoraManager
-    private lateinit var audioRingHelper: AudioRingHelper
-    private lateinit var authViewModel: AuthViewModel
-    private lateinit var callViewModel: CallViewModel
+    private val authRepository by lazy { AuthRepository(applicationContext) }
+    private val chatRepository by lazy { ChatRepository() }
+    private val callRepository by lazy { CallRepository() }
+    private val agoraManager by lazy { AgoraManager(applicationContext) }
+    private val audioRingHelper by lazy { AudioRingHelper(applicationContext) }
+    private val authViewModel by lazy { AuthViewModel(authRepository) }
+    private val callViewModel by lazy {
+        CallViewModel(
+            repository = callRepository,
+            agoraManager = agoraManager,
+            audioRingHelper = audioRingHelper,
+            currentUserFlow = authViewModel.currentUser
+        )
+    }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -59,24 +66,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         runCatching { enableEdgeToEdge() }
-
-        try {
-            audioRingHelper = AudioRingHelper(applicationContext)
-            authRepository = AuthRepository(applicationContext)
-            chatRepository = ChatRepository()
-            callRepository = CallRepository()
-            agoraManager = AgoraManager(applicationContext)
-
-            authViewModel = AuthViewModel(authRepository)
-            callViewModel = CallViewModel(
-                repository = callRepository,
-                agoraManager = agoraManager,
-                audioRingHelper = audioRingHelper,
-                currentUserFlow = authViewModel.currentUser
-            )
-        } catch (t: Throwable) {
-            Log.e("MainActivity", "Initialization error: ${t.message}", t)
-        }
 
         requestCallPermissions()
 

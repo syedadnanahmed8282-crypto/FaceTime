@@ -37,26 +37,28 @@ class AgoraManager(private val context: Context) {
     private val _isSpeakerOn = MutableStateFlow(true)
     val isSpeakerOn: StateFlow<Boolean> = _isSpeakerOn
 
-    private val eventHandler = object : IRtcEngineEventHandler() {
-        override fun onJoinChannelSuccess(channel: String?, uid: Int, elapsed: Int) {
-            Log.d("AgoraManager", "Joined channel: $channel with uid: $uid")
-            _isJoined.value = true
-        }
-
-        override fun onUserJoined(uid: Int, elapsed: Int) {
-            Log.d("AgoraManager", "Remote user joined: $uid")
-            _remoteUid.value = uid
-        }
-
-        override fun onUserOffline(uid: Int, reason: Int) {
-            Log.d("AgoraManager", "Remote user offline: $uid, reason: $reason")
-            if (_remoteUid.value == uid) {
-                _remoteUid.value = null
+    private fun createEventHandler(): IRtcEngineEventHandler {
+        return object : IRtcEngineEventHandler() {
+            override fun onJoinChannelSuccess(channel: String?, uid: Int, elapsed: Int) {
+                Log.d("AgoraManager", "Joined channel: $channel with uid: $uid")
+                _isJoined.value = true
             }
-        }
 
-        override fun onError(err: Int) {
-            Log.e("AgoraManager", "Agora RTC error code: $err")
+            override fun onUserJoined(uid: Int, elapsed: Int) {
+                Log.d("AgoraManager", "Remote user joined: $uid")
+                _remoteUid.value = uid
+            }
+
+            override fun onUserOffline(uid: Int, reason: Int) {
+                Log.d("AgoraManager", "Remote user offline: $uid, reason: $reason")
+                if (_remoteUid.value == uid) {
+                    _remoteUid.value = null
+                }
+            }
+
+            override fun onError(err: Int) {
+                Log.e("AgoraManager", "Agora RTC error code: $err")
+            }
         }
     }
 
@@ -73,7 +75,7 @@ class AgoraManager(private val context: Context) {
             val config = RtcEngineConfig()
             config.mContext = context.applicationContext
             config.mAppId = appId
-            config.mEventHandler = eventHandler
+            config.mEventHandler = createEventHandler()
             val engine = RtcEngine.create(config)
             rtcEngine = engine
             Log.d("AgoraManager", "Agora RTC Engine created successfully")
@@ -245,7 +247,9 @@ class AgoraManager(private val context: Context) {
     fun destroyEngine() {
         leaveCall()
         try {
-            RtcEngine.destroy()
+            if (rtcEngine != null) {
+                RtcEngine.destroy()
+            }
         } catch (t: Throwable) {
             Log.e("AgoraManager", "destroyEngine note: ${t.message}")
         }
